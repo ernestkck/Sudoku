@@ -21,6 +21,8 @@ module Sudoku
 
 import Test.QuickCheck
 import Data.List
+import Data.Char
+import Data.List.Split
 -- A matrix is a list of rows.
 type Matrix a = [Row a]
 
@@ -88,7 +90,7 @@ noBlanks (Sudoku s) = all (notElem Nothing) s
 --    . 8 3 . . . . 6 .
 --    . . 7 6 9 . . 4 3
 printSudoku :: Sudoku -> IO ()
-printSudoku = undefined -- TODO
+printSudoku s = putStr $ toString s
 
 -- | cell generates an arbitrary cell in a Sudoku
 -- The frequency of Nothing versus Just n values is currently 90% versus 10%,
@@ -108,13 +110,24 @@ instance Arbitrary Sudoku where
 -- | fromString converts an 81-character canonical string encoding for a
 -- | Sudoku into our internal representation
 fromString :: String -> Sudoku
-fromString = undefined -- TODO
+fromString str = Sudoku (chunksOf 9 (map fromChar (filter (not . isControl) str)))
+
+fromChar :: Char -> Maybe Int
+fromChar c = case c of
+    '.'  -> Nothing
+    c    -> Just (digitToInt c)
 
 -- | toString converts a Sudoku into its canonical 81-character string
 -- | encoding
 -- prop> fromString (toString s) == s
 toString :: Sudoku -> String
-toString = undefined -- TODO
+toString (Sudoku s) = case s of
+    []   -> []
+    x:xs -> case x of
+        []   -> '\n' : toString (Sudoku xs)
+        y:ys -> case y of
+            Nothing -> '.' : toString (Sudoku (ys:xs))
+            Just n  -> chr (n + ord '0') : toString (Sudoku (ys:xs))
 
 type Block a = [a]
 
