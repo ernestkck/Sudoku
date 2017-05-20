@@ -23,6 +23,7 @@ import Test.QuickCheck
 import Data.List
 import Data.Char
 import Data.List.Split
+
 -- A matrix is a list of rows.
 type Matrix a = [Row a]
 
@@ -54,6 +55,18 @@ example =
     , [ Nothing, Nothing, Just 7, Just 6, Just 9, Nothing, Nothing, Just 4, Just 3]
     ]
 
+eg =
+
+    [ [ Just 3, Just 6, Nothing, Nothing, Just 7, Just 1, Just 2, Nothing, Nothing]
+    , [ Nothing, Just 5, Nothing, Nothing, Nothing, Nothing, Just 1, Just 8, Nothing]
+    , [ Nothing, Nothing, Just 9, Just 2, Nothing, Just 4, Just 7, Nothing, Nothing]
+    , [ Nothing, Nothing, Nothing, Nothing, Just 1, Just 3, Nothing, Just 2, Just 8]
+    , [ Just 4, Nothing, Nothing, Just 5, Nothing, Just 2, Nothing, Nothing, Just 9]
+    , [ Just 2, Just 7, Nothing, Just 4, Just 6, Nothing, Nothing, Nothing, Nothing]
+    , [ Nothing, Nothing, Just 5, Just 3, Nothing, Just 8, Just 9, Nothing, Nothing]
+    , [ Nothing, Just 8, Just 3, Nothing, Nothing, Nothing, Nothing, Just 6, Nothing]
+    , [ Nothing, Nothing, Just 7, Just 6, Just 9, Nothing, Nothing, Just 4, Just 3]
+    ]
 -- allBlanks is a Sudoku with just blanks
 allBlanks :: Sudoku
 allBlanks = Sudoku (replicate 9 (replicate 9 Nothing))
@@ -132,13 +145,26 @@ toString (Sudoku s) = case s of
 type Block a = [a]
 
 rows :: Matrix a -> [Block a]
-rows = undefined -- TODO
+rows m = m
 
 cols :: Matrix a -> [Block a]
-cols = undefined -- TODO
+cols = transpose
 
-boxs :: Matrix a -> [Block a]
-boxs = undefined -- TODO
+
+--boxs :: Matrix a -> [Block a]
+boxs m = map concat $ groupBy3 $ helper (concatMap groupBy3 m) 0 0
+    where
+        helper :: [a] -> Int -> Int -> [a]
+        helper [] _ _   = []
+        helper x i j
+            | i < j+27 = head (drop i x) : helper x (i+3) j
+            | j < 2    = helper x (j+1) (j+1)
+            | otherwise = []
+
+groupBy3 :: Row a -> [Block a]
+groupBy3 a = case a of
+    []       -> []
+    a:b:c:ds -> [a,b,c] : groupBy3 ds
 
 -- | Test if a block of cells does not contain the same integer twice
 -- >>> okBlock [Just 1, Just 7, Nothing, Nothing, Just 3, Nothing, Nothing, Nothing, Just 2]
@@ -146,7 +172,15 @@ boxs = undefined -- TODO
 -- >>> okBlock [Just 1, Just 7, Nothing, Just 7, Just 3, Nothing, Nothing, Nothing, Just 2]
 -- False
 okBlock :: Block Cell -> Bool
-okBlock = undefined -- TODO
+okBlock b = filtered == nub filtered
+    where filtered = filterNothing b
+
+filterNothing :: Block Cell -> Block Cell
+filterNothing b = case b of
+    []   -> []
+    x:xs -> case x of
+        Nothing -> filterNothing xs
+        _       -> x : filterNothing xs
 
 -- | No block contains the same integer twice
 -- >>> okSudoku allBlanks
@@ -156,7 +190,7 @@ okBlock = undefined -- TODO
 -- >>> okSudoku $ fromString "364871295752936184819254736596713428431582679278469351645328917983147562127695843"
 -- True
 okSudoku :: Sudoku -> Bool
-okSudoku = undefined -- TODO
+okSudoku (Sudoku s) = isSudoku (Sudoku s) && all okBlock (rows s) && all okBlock (cols s) && all okBlock (boxs s)
 
 type Pos = (Int, Int)
 
