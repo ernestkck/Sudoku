@@ -66,11 +66,15 @@ allBlanks = Sudoku (replicate 9 (replicate 9 Nothing))
 -- >>> isSudoku (Sudoku (tail (cells example)))
 -- False
 isSudoku :: Sudoku -> Bool
-isSudoku = undefined -- TODO
+isSudoku (Sudoku s) =
+    length checksudoku == 9 && and checksudoku
+        where
+            checksudoku = map (\x -> length x == 9) s
+
 
 -- | noBlanks checks if a Sudoku has no blanks
 noBlanks :: Sudoku -> Bool
-noBlanks = undefined -- TODO
+noBlanks (Sudoku s) = all (notElem Nothing) s
 
 -- | printSudoku prints a Sudoku as a 9 x 9 grid
 -- Example:
