@@ -55,18 +55,7 @@ example =
     , [ Nothing, Nothing, Just 7, Just 6, Just 9, Nothing, Nothing, Just 4, Just 3]
     ]
 
-eg =
 
-    [ [ Just 3, Just 6, Nothing, Nothing, Just 7, Just 1, Just 2, Nothing, Nothing]
-    , [ Nothing, Just 5, Nothing, Nothing, Nothing, Nothing, Just 1, Just 8, Nothing]
-    , [ Nothing, Nothing, Just 9, Just 2, Nothing, Just 4, Just 7, Nothing, Nothing]
-    , [ Nothing, Nothing, Nothing, Nothing, Just 1, Just 3, Nothing, Just 2, Just 8]
-    , [ Just 4, Nothing, Nothing, Just 5, Nothing, Just 2, Nothing, Nothing, Just 9]
-    , [ Just 2, Just 7, Nothing, Just 4, Just 6, Nothing, Nothing, Nothing, Nothing]
-    , [ Nothing, Nothing, Just 5, Just 3, Nothing, Just 8, Just 9, Nothing, Nothing]
-    , [ Nothing, Just 8, Just 3, Nothing, Nothing, Nothing, Nothing, Just 6, Nothing]
-    , [ Nothing, Nothing, Just 7, Just 6, Just 9, Nothing, Nothing, Just 4, Just 3]
-    ]
 -- allBlanks is a Sudoku with just blanks
 allBlanks :: Sudoku
 allBlanks = Sudoku (replicate 9 (replicate 9 Nothing))
@@ -103,7 +92,7 @@ noBlanks (Sudoku s) = all (notElem Nothing) s
 --    . 8 3 . . . . 6 .
 --    . . 7 6 9 . . 4 3
 printSudoku :: Sudoku -> IO ()
-printSudoku s = putStr $ toString s
+printSudoku s = putStrLn $ unlines (chunksOf 9 (toString s))
 
 -- | cell generates an arbitrary cell in a Sudoku
 -- The frequency of Nothing versus Just n values is currently 90% versus 10%,
@@ -137,7 +126,7 @@ toString :: Sudoku -> String
 toString (Sudoku s) = case s of
     []   -> []
     x:xs -> case x of
-        []   -> '\n' : toString (Sudoku xs)
+        []   -> toString (Sudoku xs)
         y:ys -> case y of
             Nothing -> '.' : toString (Sudoku (ys:xs))
             Just n  -> chr (n + ord '0') : toString (Sudoku (ys:xs))
@@ -151,7 +140,7 @@ cols :: Matrix a -> [Block a]
 cols = transpose
 
 
---boxs :: Matrix a -> [Block a]
+boxs :: Matrix a -> [Block a]
 boxs m = map concat $ groupBy3 $ helper (concatMap groupBy3 m) 0 0
     where
         helper :: [a] -> Int -> Int -> [a]
@@ -200,7 +189,17 @@ type Pos = (Int, Int)
 -- >>> blank example
 -- (0,2)
 blank :: Sudoku -> Pos
-blank = undefined -- TODO
+blank s = helper s 0 0
+    where
+        helper :: Sudoku -> Int -> Int -> Pos
+        helper (Sudoku s) i j = case s of
+            [[]]   -> (-1, -1)
+            x:xs -> case x of
+                []   -> helper (Sudoku xs) (i+1) 0
+                y:ys -> case y of
+                    Nothing -> (i, j)
+                    _       -> helper (Sudoku (ys:xs)) i (j+1)
+
 
 -- | Given a list, and a tuple containing an index in the list and a new value,
 -- | update the given list with the new value at the given index.
@@ -209,14 +208,32 @@ blank = undefined -- TODO
 -- >>> ["p","qq","rrr"] !!= (0,"bepa")
 -- ["bepa","qq","rrr"]
 (!!=) :: [a] -> (Int, a) -> [a]
-(!!=) = undefined -- TODO
+(!!=) a (i, e) = case splitAt i a of
+    (x,y) -> x ++ e : tail y
 
 -- | Given a Sudoku, a position, and a new cell value,
 -- | update the given Sudoku at the given position with the new value.
 update :: Sudoku -> Pos -> Int -> Sudoku
-update = undefined -- TODO
+update (Sudoku s) (i,j) n = case splitAt i s of
+    (x, y:ys) -> Sudoku (x ++ y !!= (j, Just n) : ys)
 
 -- | solve takes an 81-character encoding of a Sudoku puzzle and returns a
 -- | list of solutions for it, if any
 solve :: String -> [String]
-solve = undefined -- TODO
+solve str = case str of
+    [] -> []
+    _  -> case fromString str of
+        s -> map toString (solve' s)
+            --concatMap solve [toString (update s (blank s) i) | i <- [1..9] ]
+    where
+        solve' :: Sudoku -> [Sudoku]
+        solve' s
+            | not (okSudoku s) = []
+            | noBlanks s       = [s]
+            | otherwise        = do
+                i <- [1..9]
+                let s' = update s (blank s) i
+                solve' s'
+
+test :: String
+test = "8149765326591234787328..16.9.8.......7.....9.......2.5.91....5...7439.2.4....7..."
