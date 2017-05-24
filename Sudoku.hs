@@ -1,6 +1,6 @@
--- Name: My Name
--- UID: u12345678
--- Collaborators: Jane Doe, Joe Bloggs
+-- Name: Ernest Kwan
+-- UID: u6381103
+-- Collaborators:
 module Sudoku
   ( allBlanks
   , isSudoku
@@ -23,6 +23,7 @@ import Test.QuickCheck
 import Data.List
 import Data.Char
 import Data.List.Split
+import Data.Maybe
 
 -- A matrix is a list of rows.
 type Matrix a = [Row a]
@@ -43,7 +44,7 @@ type Cell = Maybe Int
 
 example :: Sudoku
 example =
-  Sudoku
+    Sudoku
     [ [ Just 3, Just 6, Nothing, Nothing, Just 7, Just 1, Just 2, Nothing, Nothing]
     , [ Nothing, Just 5, Nothing, Nothing, Nothing, Nothing, Just 1, Just 8, Nothing]
     , [ Nothing, Nothing, Just 9, Just 2, Nothing, Just 4, Just 7, Nothing, Nothing]
@@ -54,7 +55,6 @@ example =
     , [ Nothing, Just 8, Just 3, Nothing, Nothing, Nothing, Nothing, Just 6, Nothing]
     , [ Nothing, Nothing, Just 7, Just 6, Just 9, Nothing, Nothing, Just 4, Just 3]
     ]
-
 
 -- allBlanks is a Sudoku with just blanks
 allBlanks :: Sudoku
@@ -131,6 +131,15 @@ toString (Sudoku s) = case s of
             Nothing -> '.' : toString (Sudoku (ys:xs))
             Just n  -> chr (n + ord '0') : toString (Sudoku (ys:xs))
 
+-- | Check structure of a Sudoku: 9 rows, 9 columns, 9 boxes, each of
+-- | exactly 9 cells
+-- prop> prop_Sudoku
+prop_Sudoku :: Sudoku -> Bool
+prop_Sudoku (Sudoku s)
+    = length (rows s) == 9 && all (\c -> length c == 9) (rows s)
+   && length (cols s) == 9 && all (\c -> length c == 9) (cols s)
+   && length (boxs s) == 9 && all (\c -> length c == 9) (boxs s)
+
 type Block a = [a]
 
 rows :: Matrix a -> [Block a]
@@ -138,7 +147,6 @@ rows m = m
 
 cols :: Matrix a -> [Block a]
 cols = transpose
-
 
 boxs :: Matrix a -> [Block a]
 boxs m = map concat $ groupBy3 $ helper (concatMap groupBy3 m) 0 0
@@ -189,18 +197,51 @@ type Pos = (Int, Int)
 -- >>> blank example
 -- (0,2)
 blank :: Sudoku -> Pos
-blank s = helper s 0 0
+blank sud = helper sud 0 0
     where
         helper :: Sudoku -> Int -> Int -> Pos
         helper (Sudoku s) i j = case s of
-            [[]]   -> (-1, -1)
             x:xs -> case x of
                 []   -> helper (Sudoku xs) (i+1) 0
                 y:ys -> case y of
                     Nothing -> (i, j)
                     _       -> helper (Sudoku (ys:xs)) i (j+1)
 
+blank' :: Sudoku -> Pos
+blank' (Sudoku s)
+    | minCols <= minRows && minCols <= minBoxs = case elemIndex minCols (countBlanks (cols s)) of
+        Just j -> colhelper (cols s !! j) 0 j
+    | minRows <= minCols && minRows <= minBoxs = case elemIndex minRows (countBlanks (rows s)) of
+        Just i -> rowhelper (rows s !! i) i 0
+    | otherwise = case elemIndex minBoxs (countBlanks (boxs s)) of
+        Just i -> boxhelper (boxs s !! i) ((i `mod` 3) * 3) ((i `div` 3) * 3) 0
+    where
+        colhelper :: Block Cell -> Int -> Int -> Pos
+        colhelper (x:xs) i j = case x of
+            Nothing -> (i, j)
+            _       -> colhelper xs (i+1) j
 
+        rowhelper :: Block Cell -> Int -> Int -> Pos
+        rowhelper (x:xs) i j = case x of
+            Nothing -> (i, j)
+            _       -> rowhelper xs i (j+1)
+
+        boxhelper :: Block Cell -> Int -> Int -> Int -> Pos
+        boxhelper (x:xs) i j k = case x of
+            Nothing -> (i + (k `div` 3), j + (k `mod` 3))
+            _       -> boxhelper xs i j (k+1)
+
+        countBlanks = map (length . filter isNothing)
+        minElem x = minimum (countBlanks x)
+        minCols = minElem (cols s)
+        minRows = minElem (rows s)
+        minBoxs = minElem (boxs s)
+
+countBlanks = map (length . filter isNothing)
+minElem x = minimum (countBlanks x)
+minCols (Sudoku s) = minElem (cols s)
+minRows (Sudoku s) = minElem (rows s)
+minBoxs (Sudoku s) = minElem (boxs s)
 -- | Given a list, and a tuple containing an index in the list and a new value,
 -- | update the given list with the new value at the given index.
 -- >>> ["a","b","c","d"] !!= (1,"apa")
@@ -237,3 +278,16 @@ solve str = case str of
 
 test :: String
 test = "8149765326591234787328..16.9.8.......7.....9.......2.5.91....5...7439.2.4....7..."
+
+eg :: Matrix Cell
+eg =
+    [ [ Just 3, Just 6, Nothing, Just 8, Just 7, Just 1, Just 2, Nothing, Nothing]
+    , [ Nothing, Just 5, Nothing, Just 9, Nothing, Nothing, Just 1, Just 8, Nothing]
+    , [ Nothing, Nothing, Just 9, Just 2, Nothing, Just 4, Just 7, Nothing, Nothing]
+    , [ Nothing, Nothing, Nothing, Nothing, Just 1, Just 3, Nothing, Just 2, Just 8]
+    , [ Just 4, Nothing, Nothing, Just 5, Nothing, Just 2, Nothing, Nothing, Just 9]
+    , [ Just 2, Just 7, Nothing, Just 4, Nothing, Nothing, Nothing, Nothing, Nothing]
+    , [ Nothing, Nothing, Just 5, Just 3, Nothing, Just 8, Just 9, Nothing, Nothing]
+    , [ Nothing, Just 8, Just 3, Nothing, Nothing, Nothing, Nothing, Just 6, Nothing]
+    , [ Nothing, Nothing, Just 7, Just 6, Just 9, Nothing, Nothing, Just 4, Just 3]
+    ]
