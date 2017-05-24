@@ -273,7 +273,7 @@ solve str = case str of
             | noBlanks s       = [s]
             | otherwise        = do
                 i <- [1..9]
-                let s' = update s (blank s) i
+                let s' = update s (blank' s) i
                 solve' s'
 
 test :: String
