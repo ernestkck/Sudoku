@@ -201,6 +201,7 @@ blank sud = helper sud 0 0
     where
         helper :: Sudoku -> Int -> Int -> Pos
         helper (Sudoku s) i j = case s of
+            []   -> error "can't find blank for empty sudoku"
             x:xs -> case x of
                 []   -> helper (Sudoku xs) (i+1) 0
                 y:ys -> case y of
@@ -210,38 +211,44 @@ blank sud = helper sud 0 0
 blank' :: Sudoku -> Pos
 blank' (Sudoku s)
     | minCols <= minRows && minCols <= minBoxs = case elemIndex minCols (countBlanks (cols s)) of
-        Just j -> colhelper (cols s !! j) 0 j
+        Nothing -> error "cant find minCols in blank'"
+        Just j  -> colhelper (cols s !! j) 0 j
     | minRows <= minCols && minRows <= minBoxs = case elemIndex minRows (countBlanks (rows s)) of
-        Just i -> rowhelper (rows s !! i) i 0
+        Nothing -> error "cant find minRows in blank'"
+        Just i  -> rowhelper (rows s !! i) i 0
     | otherwise = case elemIndex minBoxs (countBlanks (boxs s)) of
-        Just i -> boxhelper (boxs s !! i) ((i `mod` 3) * 3) ((i `div` 3) * 3) 0
+        Nothing -> error "cant find minBoxs in blank'"
+        Just i  -> boxhelper (boxs s !! i) ((i `mod` 3) * 3) ((i `div` 3) * 3) 0
     where
         colhelper :: Block Cell -> Int -> Int -> Pos
+        colhelper [] _ _ = error "empty col in colhelper"
         colhelper (x:xs) i j = case x of
             Nothing -> (i, j)
             _       -> colhelper xs (i+1) j
 
         rowhelper :: Block Cell -> Int -> Int -> Pos
+        rowhelper [] _ _ = error "empty row in rowhelper"
         rowhelper (x:xs) i j = case x of
             Nothing -> (i, j)
             _       -> rowhelper xs i (j+1)
 
         boxhelper :: Block Cell -> Int -> Int -> Int -> Pos
+        boxhelper [] _ _ _ = error "empty box in boxhelper"
         boxhelper (x:xs) i j k = case x of
             Nothing -> (i + (k `div` 3), j + (k `mod` 3))
             _       -> boxhelper xs i j (k+1)
 
         countBlanks = map (length . filter isNothing)
-        minElem x = minimum (countBlanks x)
-        minCols = minElem (cols s)
-        minRows = minElem (rows s)
-        minBoxs = minElem (boxs s)
+        minElem :: [Int] -> Int
+        minElem a = case a of
+            []  -> 10
+            x:xs
+                | x > 0 -> min x (minElem xs)
+                | otherwise -> minElem xs
+        minCols = minElem (countBlanks (cols s))
+        minRows = minElem (countBlanks (rows s))
+        minBoxs = minElem (countBlanks (boxs s))
 
-countBlanks = map (length . filter isNothing)
-minElem x = minimum (countBlanks x)
-mincols (Sudoku s) = minElem (cols s)
-minrows (Sudoku s) = minElem (rows s)
-minboxs (Sudoku s) = minElem (boxs s)
 -- | Given a list, and a tuple containing an index in the list and a new value,
 -- | update the given list with the new value at the given index.
 -- >>> ["a","b","c","d"] !!= (1,"apa")
@@ -256,6 +263,7 @@ minboxs (Sudoku s) = minElem (boxs s)
 -- | update the given Sudoku at the given position with the new value.
 update :: Sudoku -> Pos -> Int -> Sudoku
 update (Sudoku s) (i,j) n = case splitAt i s of
+    (_, [])   -> error "error in update"
     (x, y:ys) -> Sudoku (x ++ y !!= (j, Just n) : ys)
 
 -- | solve takes an 81-character encoding of a Sudoku puzzle and returns a
@@ -277,7 +285,7 @@ solve str = case str of
                 solve' s'
 
 test :: String
-test = "8149765326591234787328..16.9.8.......7.....9.......2.5.91....5...7439.2.4....7..."
+test = "..3.2.6..9..3.5..1..18.64....81.29..7.......8..67.82....26.95..8..2.3..9..5.1.3.."
 
 eg :: Matrix Cell
 eg =
