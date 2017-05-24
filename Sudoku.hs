@@ -100,7 +100,7 @@ printSudoku s = putStrLn $ unlines (chunksOf 9 (toString s))
 cell :: Gen (Maybe Int)
 cell =
   frequency
-    [(10, oneof [return (Just n) | n <- [1 .. 9]]), (90, return Nothing)]
+    [(25, oneof [return (Just n) | n <- [1 .. 9]]), (75, return Nothing)]
 
 -- | An instance for generating Arbitrary Sudokus
 -- prop> isSudoku s
@@ -112,7 +112,10 @@ instance Arbitrary Sudoku where
 -- | fromString converts an 81-character canonical string encoding for a
 -- | Sudoku into our internal representation
 fromString :: String -> Sudoku
-fromString str = Sudoku (chunksOf 9 (map fromChar (filter (not . isControl) str)))
+fromString str = case map fromChar (filter (not . isControl) str) of
+    s
+        | length s /= 81 -> error "not a valid string"
+        | otherwise      -> Sudoku (chunksOf 9 s)
 
 fromChar :: Char -> Maybe Int
 fromChar c = case c of
@@ -129,7 +132,7 @@ toString (Sudoku s) = case s of
         []   -> toString (Sudoku xs)
         y:ys -> case y of
             Nothing -> '.' : toString (Sudoku (ys:xs))
-            Just n  -> chr (n + ord '0') : toString (Sudoku (ys:xs))
+            Just n  -> intToDigit n : toString (Sudoku (ys:xs))
 
 -- | Check structure of a Sudoku: 9 rows, 9 columns, 9 boxes, each of
 -- | exactly 9 cells
@@ -169,15 +172,10 @@ groupBy3 a = case a of
 -- >>> okBlock [Just 1, Just 7, Nothing, Just 7, Just 3, Nothing, Nothing, Nothing, Just 2]
 -- False
 okBlock :: Block Cell -> Bool
-okBlock b = filtered == nub filtered
-    where filtered = filterNothing b
-
-filterNothing :: Block Cell -> Block Cell
-filterNothing b = case b of
-    []   -> []
-    x:xs -> case x of
-        Nothing -> filterNothing xs
-        _       -> x : filterNothing xs
+okBlock []     = True
+okBlock (x:xs) = case x of
+    Nothing -> okBlock xs
+    _       -> notElem x xs && okBlock xs
 
 -- | No block contains the same integer twice
 -- >>> okSudoku allBlanks
@@ -186,6 +184,9 @@ filterNothing b = case b of
 -- True
 -- >>> okSudoku $ fromString "364871295752936184819254736596713428431582679278469351645328917983147562127695843"
 -- True
+-- >>> okSudoku $ fromString "36..712...5....18...92.47......13.284..1.2..927.46......53.89...83....6...769..43"
+-- False
+
 okSudoku :: Sudoku -> Bool
 okSudoku (Sudoku s) = isSudoku (Sudoku s) && all okBlock (rows s) && all okBlock (cols s) && all okBlock (boxs s)
 
@@ -194,27 +195,20 @@ type Pos = (Int, Int)
 -- | Return a blank position in the Sudoku
 -- >>> blank allBlanks
 -- (0,0)
--- >>> blank example
--- (0,2)
-blank :: Sudoku -> Pos
-blank sud = helper sud 0 0
-    where
-        helper :: Sudoku -> Int -> Int -> Pos
-        helper (Sudoku s) i j = case s of
-            []   -> error "can't find blank for empty sudoku"
-            x:xs -> case x of
-                []   -> helper (Sudoku xs) (i+1) 0
-                y:ys -> case y of
-                    Nothing -> (i, j)
-                    _       -> helper (Sudoku (ys:xs)) i (j+1)
 
-blank' :: Sudoku -> Pos
-blank' (Sudoku s)
-    | minCols <= minRows = case elemIndex minCols (countBlanks (cols s)) of
-        Nothing -> error "cant find minCols in blank'"
+-- | Check that the cell at the blank position is Nothing
+-- prop> prop_Blank
+prop_Blank :: Sudoku -> Bool
+prop_Blank s = case blank s of
+    (i, j) -> isNothing (cells s !! i !! j)
+
+blank :: Sudoku -> Pos
+blank (Sudoku s)
+    | minCols < minRows = case elemIndex minCols (countBlanks (cols s)) of
+        Nothing -> error "cannot find minCols in blank"
         Just j  -> colhelper (cols s !! j) 0 j
     | otherwise = case elemIndex minRows (countBlanks (rows s)) of
-        Nothing -> error "cant find minRows in blank'"
+        Nothing -> error "cannot find minRows in blank"
         Just i  -> rowhelper (rows s !! i) i 0
     where
         colhelper :: Block Cell -> Int -> Int -> Pos
@@ -229,7 +223,6 @@ blank' (Sudoku s)
             Nothing -> (i, j)
             _       -> rowhelper xs i (j+1)
 
-        countBlanks = map (length . filter isNothing)
         minElem :: [Int] -> Int
         minElem a = case a of
             []  -> 10
@@ -238,6 +231,7 @@ blank' (Sudoku s)
                 | otherwise -> minElem xs
         minCols = minElem (countBlanks (cols s))
         minRows = minElem (countBlanks (rows s))
+countBlanks = map (length . filter isNothing)
 
 -- | Given a list, and a tuple containing an index in the list and a new value,
 -- | update the given list with the new value at the given index.
@@ -246,6 +240,7 @@ blank' (Sudoku s)
 -- >>> ["p","qq","rrr"] !!= (0,"bepa")
 -- ["bepa","qq","rrr"]
 (!!=) :: [a] -> (Int, a) -> [a]
+(!!=) [] _ = []
 (!!=) a (i, e) = case splitAt i a of
     (x,y) -> x ++ e : tail y
 
@@ -253,7 +248,7 @@ blank' (Sudoku s)
 -- | update the given Sudoku at the given position with the new value.
 update :: Sudoku -> Pos -> Int -> Sudoku
 update (Sudoku s) (i,j) n = case splitAt i s of
-    (_, [])   -> error "error in update"
+    (_, [])   -> error "error in update: index not in range"
     (x, y:ys) -> Sudoku (x ++ y !!= (j, Just n) : ys)
 
 -- | solve takes an 81-character encoding of a Sudoku puzzle and returns a
@@ -267,25 +262,54 @@ solve str = case str of
     where
         solve' :: Sudoku -> [Sudoku]
         solve' s
-            | not (okSudoku s) = []
-            | noBlanks s       = [s]
+            | not (okSudoku propagated) = []
+            | noBlanks propagated = [propagated]
             | otherwise        = do
                 i <- [1..9]
-                let s' = update s (blank' s) i
+                let s' = update propagated (blank propagated) i
                 solve' s'
+                where propagated = propagate s
+
+propagate :: Sudoku -> Sudoku
+propagate (Sudoku s)
+    | 1 `elem` colsBlanks = case elemIndex 1 colsBlanks of
+        Just j  -> case cols s !! j of
+            [] -> error "error in propagate: col index out of range"
+            b  -> case elemIndex Nothing b of
+                Nothing -> error "no blank in column in propagate"
+                Just i  -> propagate (update (Sudoku s) (i, j) (missingValue b))
+
+    | 1 `elem` rowsBlanks = case elemIndex 1 rowsBlanks of
+        Just i  -> case rows s !! i of
+            [] -> error "error in propagate: row index out of range"
+            b  -> case elemIndex Nothing b of
+                Nothing -> error "no blank in row in propagate"
+                Just j  -> propagate (update (Sudoku s) (i, j) (missingValue b))
+    | 1 `elem` boxsBlanks = case elemIndex 1 boxsBlanks of
+        Just i -> case boxs s !! i of
+            [] -> error "error in propagate: box indes out of range"
+            b  -> case elemIndex Nothing b of
+                Nothing -> error "no blank in box in propagate"
+                Just j  -> propagate (update (Sudoku s) (i `mod` 3 * 3 + j `div` 3, i `div` 3 * 3 + j `mod` 3) (missingValue b))
+    | otherwise = Sudoku s
+    where
+        missingValue b = 45 - sum(map (fromMaybe 0) b)
+        colsBlanks = countBlanks (cols s)
+        rowsBlanks = countBlanks (rows s)
+        boxsBlanks = countBlanks (boxs s)
 
 test :: String
-test = "..3.2.6..9..3.5..1..18.64....81.29..7.......8..67.82....26.95..8..2.3..9..5.1.3.."
+test = "4.....8.5.3..........7......2.....6.....8.4......1.......6.3.7.5..2.....1.4......"
 
 eg :: Matrix Cell
 eg =
     [ [ Just 3, Just 6, Nothing, Nothing, Just 7, Just 1, Just 2, Nothing, Nothing]
     , [ Just 7, Just 5, Nothing, Nothing, Nothing, Nothing, Just 1, Just 8, Nothing]
     , [ Nothing, Nothing, Just 9, Just 2, Nothing, Just 4, Just 7, Nothing, Nothing]
-    , [ Nothing, Nothing, Nothing, Nothing, Just 1, Just 3, Nothing, Just 2, Just 8]
+    , [ Just 5, Just 9, Just 6, Nothing, Just 1, Just 3, Just 4, Just 2, Just 8]
     , [ Just 4, Nothing, Nothing, Just 5, Nothing, Just 2, Nothing, Nothing, Just 9]
-    , [ Just 2, Just 7, Nothing, Just 4, Just 6, Nothing, Nothing, Nothing, Nothing]
-    , [ Nothing, Nothing, Just 5, Just 3, Nothing, Just 8, Just 9, Nothing, Nothing]
-    , [ Nothing, Just 8, Just 3, Nothing, Nothing, Nothing, Nothing, Just 6, Nothing]
-    , [ Nothing, Nothing, Just 7, Just 6, Just 9, Nothing, Nothing, Just 4, Just 3]
+    , [ Just 2, Just 7, Nothing, Just 4, Just 6, Just 9, Nothing, Nothing, Nothing]
+    , [ Just 6, Nothing, Just 5, Just 3, Nothing, Just 8, Just 9, Nothing, Nothing]
+    , [ Just 9, Just 8, Just 3, Nothing, Nothing, Nothing, Nothing, Just 6, Nothing]
+    , [ Just 1, Nothing, Just 7, Just 6, Just 9, Nothing, Nothing, Just 4, Just 3]
     ]
