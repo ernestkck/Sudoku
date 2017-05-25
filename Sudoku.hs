@@ -285,7 +285,7 @@ solve str = case fromString str of
             | not (okSudoku s)    = []
             | noBlanks propagated = [propagated]
             | otherwise           = do
-                i <- [1..9]
+                i <- choices
                 let s' = update propagated (blank propagated) i
                 solve' s'
                 where
