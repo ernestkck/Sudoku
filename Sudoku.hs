@@ -301,7 +301,7 @@ propagate (Sudoku s)
                         [v1, v2]
                             | v1 `elem` toInts (cols s !! j1) -> update (update (Sudoku s) (i, j1) v2) (i, j2) v1
                             | v1 `elem` toInts (cols s !! j2) -> update (update (Sudoku s) (i, j1) v1) (i, j2) v2
-
+    | otherwise = Sudoku s
 
     where
         missingValue b = 45 - sum(map (fromMaybe 0) b)
