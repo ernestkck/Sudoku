@@ -262,42 +262,70 @@ solve str = case str of
     where
         solve' :: Sudoku -> [Sudoku]
         solve' s
-            | not (okSudoku propagated) = []
-            | noBlanks propagated = [propagated]
+            | not (okSudoku s) = []
+            | noBlanks s = [s]
             | otherwise        = do
                 i <- [1..9]
-                let s' = update propagated (blank propagated) i
+                let s' = propagate (update s (blank s) i)
                 solve' s'
                 where propagated = propagate s
 
 propagate :: Sudoku -> Sudoku
 propagate (Sudoku s)
+    -- check for cols/rows/boxs with only 1 blank
     | 1 `elem` colsBlanks = case elemIndex 1 colsBlanks of
         Just j  -> case cols s !! j of
-            [] -> error "error in propagate: col index out of range"
             b  -> case elemIndex Nothing b of
-                Nothing -> error "no blank in column in propagate"
-                Just i  -> propagate (update (Sudoku s) (i, j) (missingValue b))
+                Just i  -> update (Sudoku s) (i, j) (missingValue b)
 
     | 1 `elem` rowsBlanks = case elemIndex 1 rowsBlanks of
         Just i  -> case rows s !! i of
-            [] -> error "error in propagate: row index out of range"
             b  -> case elemIndex Nothing b of
-                Nothing -> error "no blank in row in propagate"
-                Just j  -> propagate (update (Sudoku s) (i, j) (missingValue b))
+                Just j  -> update (Sudoku s) (i, j) (missingValue b)
     | 1 `elem` boxsBlanks = case elemIndex 1 boxsBlanks of
         Just i -> case boxs s !! i of
-            [] -> error "error in propagate: box indes out of range"
             b  -> case elemIndex Nothing b of
-                Nothing -> error "no blank in box in propagate"
-                Just j  -> propagate (update (Sudoku s) (i `mod` 3 * 3 + j `div` 3, i `div` 3 * 3 + j `mod` 3) (missingValue b))
-    | otherwise = Sudoku s
+                Just j  -> update (Sudoku s) (i `mod` 3 * 3 + j `div` 3, i `div` 3 * 3 + j `mod` 3) (missingValue b)
+    -- check for cols/rows
+    | 2 `elem` colsBlanks = case elemIndex 2 colsBlanks of
+        Just j -> case cols s !! j of
+            col -> case elemIndices Nothing col of
+                [i1, i2] -> case missingValues col [1..9] of
+                    [v1, v2]
+                        | v1 `elem` toInts (rows s !! i1) -> update (update (Sudoku s) (i1, j) v2) (i2, j) v1
+                        | v1 `elem` toInts (rows s !! i2) -> update (update (Sudoku s) (i1, j) v1) (i2, j) v2
+    | 2 `elem` rowsBlanks = case elemIndex 2 rowsBlanks of
+            Just i -> case rows s !! i of
+                row -> case elemIndices Nothing row of
+                    [j1, j2] -> case missingValues row [1..9] of
+                        [v1, v2]
+                            | v1 `elem` toInts (cols s !! j1) -> update (update (Sudoku s) (i, j1) v2) (i, j2) v1
+                            | v1 `elem` toInts (cols s !! j2) -> update (update (Sudoku s) (i, j1) v1) (i, j2) v2
+
+
     where
         missingValue b = 45 - sum(map (fromMaybe 0) b)
         colsBlanks = countBlanks (cols s)
         rowsBlanks = countBlanks (rows s)
         boxsBlanks = countBlanks (boxs s)
 
+toInts :: Block Cell -> [Int]
+toInts b = map fromJust (filter isJust b)
+-- Take a block and [1..9] as the arguments
+-- and find the missing numbers in a block
+missingValues :: Block Cell -> [Int] -> [Int]
+missingValues b a = case b of
+    [] -> a
+    x:xs -> case x of
+        Nothing -> missingValues xs a
+        Just x  -> missingValues xs (filter (/= x) a)
+
+choices :: [Int] -> Block Cell -> [Int]
+choices values b = case values of
+    [] -> []
+    x:xs
+        | x `elem` (toInts b) -> choices xs b
+        | otherwise   -> x : choices xs b
 test :: String
 test = "4.....8.5.3..........7......2.....6.....8.4......1.......6.3.7.5..2.....1.4......"
 
@@ -305,11 +333,11 @@ eg :: Matrix Cell
 eg =
     [ [ Just 3, Just 6, Nothing, Nothing, Just 7, Just 1, Just 2, Nothing, Nothing]
     , [ Just 7, Just 5, Nothing, Nothing, Nothing, Nothing, Just 1, Just 8, Nothing]
-    , [ Nothing, Nothing, Just 9, Just 2, Nothing, Just 4, Just 7, Nothing, Nothing]
-    , [ Just 5, Just 9, Just 6, Nothing, Just 1, Just 3, Just 4, Just 2, Just 8]
+    , [ Nothing, Just 1, Just 9, Just 2, Nothing, Just 4, Just 7, Nothing, Nothing]
+    , [ Just 5, Just 9, Nothing, Nothing, Just 1, Just 3, Just 4, Just 2, Just 8]
     , [ Just 4, Nothing, Nothing, Just 5, Nothing, Just 2, Nothing, Nothing, Just 9]
     , [ Just 2, Just 7, Nothing, Just 4, Just 6, Just 9, Nothing, Nothing, Nothing]
     , [ Just 6, Nothing, Just 5, Just 3, Nothing, Just 8, Just 9, Nothing, Nothing]
     , [ Just 9, Just 8, Just 3, Nothing, Nothing, Nothing, Nothing, Just 6, Nothing]
-    , [ Just 1, Nothing, Just 7, Just 6, Just 9, Nothing, Nothing, Just 4, Just 3]
+    , [ Nothing, Nothing, Just 7, Just 6, Just 9, Nothing, Nothing, Just 4, Just 3]
     ]
