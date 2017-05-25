@@ -100,7 +100,7 @@ printSudoku s = putStrLn $ unlines (chunksOf 9 (toString s))
 cell :: Gen (Maybe Int)
 cell =
   frequency
-    [(25, oneof [return (Just n) | n <- [1 .. 9]]), (75, return Nothing)]
+    [(20, oneof [return (Just n) | n <- [1 .. 9]]), (80, return Nothing)]
 
 -- | An instance for generating Arbitrary Sudokus
 -- prop> isSudoku s
@@ -116,7 +116,7 @@ fromString str = case map fromChar (filter (not . isControl) str) of
     s
         | length s /= 81 -> error "not a valid string"
         | otherwise      -> Sudoku (chunksOf 9 s)
-
+-- | fromChar converts a character into Cell, which is Maybe Int
 fromChar :: Char -> Maybe Int
 fromChar c = case c of
     '.'  -> Nothing
@@ -144,13 +144,18 @@ prop_Sudoku (Sudoku s)
    && length (boxs s) == 9 && all (\c -> length c == 9) (boxs s)
 
 type Block a = [a]
-
+-- | rows, cols and boxs return lists of blocks,
+-- | which are the rows, columns and 3x3 boxes of the matrix respectively
 rows :: Matrix a -> [Block a]
 rows m = m
 
 cols :: Matrix a -> [Block a]
 cols = transpose
 
+-- | boxs convert the matrix into 3x3 boxes with indices
+-- | 0 3 6
+-- | 1 4 7
+-- | 2 5 8
 boxs :: Matrix a -> [Block a]
 boxs m = map concat $ groupBy3 $ helper (concatMap groupBy3 m) 0 0
     where
@@ -161,10 +166,10 @@ boxs m = map concat $ groupBy3 $ helper (concatMap groupBy3 m) 0 0
             | j < 2    = helper x (j+1) (j+1)
             | otherwise = []
 
-groupBy3 :: Row a -> [Block a]
-groupBy3 a = case a of
-    []       -> []
-    a:b:c:ds -> [a,b,c] : groupBy3 ds
+        groupBy3 :: Row a -> [Block a]
+        groupBy3 a = case a of
+            []       -> []
+            a:b:c:ds -> [a,b,c] : groupBy3 ds
 
 -- | Test if a block of cells does not contain the same integer twice
 -- >>> okBlock [Just 1, Just 7, Nothing, Nothing, Just 3, Nothing, Nothing, Nothing, Just 2]
@@ -186,9 +191,9 @@ okBlock (x:xs) = case x of
 -- True
 -- >>> okSudoku $ fromString "36..712...5....18...92.47......13.284..1.2..927.46......53.89...83....6...769..43"
 -- False
-
+-- | Check that all blocks (rows, columns and boxes) do not contain the same digit twice
 okSudoku :: Sudoku -> Bool
-okSudoku (Sudoku s) = isSudoku (Sudoku s) && all okBlock (rows s) && all okBlock (cols s) && all okBlock (boxs s)
+okSudoku (Sudoku s) = all okBlock (rows s) && all okBlock (cols s) && all okBlock (boxs s)
 
 type Pos = (Int, Int)
 
@@ -202,6 +207,7 @@ prop_Blank :: Sudoku -> Bool
 prop_Blank s = case blank s of
     (i, j) -> isNothing (cells s !! i !! j)
 
+-- | Finds a blank cell in the sudoku with fewest candidates by rows and columns
 blank :: Sudoku -> Pos
 blank (Sudoku s)
     | minCols < minRows = case elemIndex minCols (countBlanks (cols s)) of
@@ -231,7 +237,9 @@ blank (Sudoku s)
                 | otherwise -> minElem xs
         minCols = minElem (countBlanks (cols s))
         minRows = minElem (countBlanks (rows s))
-countBlanks = map (length . filter isNothing)
+-- | Return the number of blanks for a list of blocks
+countBlanks :: [Block Cell] -> [Int]
+countBlanks b = map (length . filter isNothing) b
 
 -- | Given a list, and a tuple containing an index in the list and a new value,
 -- | update the given list with the new value at the given index.
@@ -254,22 +262,22 @@ update (Sudoku s) (i,j) n = case splitAt i s of
 -- | solve takes an 81-character encoding of a Sudoku puzzle and returns a
 -- | list of solutions for it, if any
 solve :: String -> [String]
-solve str = case str of
-    [] -> []
-    _  -> case fromString str of
-        s -> map toString (solve' s)
-            --concatMap solve [toString (update s (blank s) i) | i <- [1..9] ]
+solve [] = []
+solve str = case fromString str of
+    s -> map toString (solve' s)
     where
         solve' :: Sudoku -> [Sudoku]
         solve' s
             | not (okSudoku s) = []
-            | noBlanks s = [s]
+            | noBlanks propagated = [propagated]
             | otherwise        = do
                 i <- [1..9]
-                let s' = propagate (update s (blank s) i)
+                let s' = update propagated (blank propagated) i
                 solve' s'
                 where propagated = propagate s
 
+-- | use other methods to fill in more blanks in the sudoku
+-- | based on the number of blanks in each block
 propagate :: Sudoku -> Sudoku
 propagate (Sudoku s)
     -- check for cols/rows/boxs with only 1 blank
@@ -294,13 +302,15 @@ propagate (Sudoku s)
                     [v1, v2]
                         | v1 `elem` toInts (rows s !! i1) -> update (update (Sudoku s) (i1, j) v2) (i2, j) v1
                         | v1 `elem` toInts (rows s !! i2) -> update (update (Sudoku s) (i1, j) v1) (i2, j) v2
+                        | otherwise -> Sudoku s
     | 2 `elem` rowsBlanks = case elemIndex 2 rowsBlanks of
-            Just i -> case rows s !! i of
-                row -> case elemIndices Nothing row of
-                    [j1, j2] -> case missingValues row [1..9] of
-                        [v1, v2]
-                            | v1 `elem` toInts (cols s !! j1) -> update (update (Sudoku s) (i, j1) v2) (i, j2) v1
-                            | v1 `elem` toInts (cols s !! j2) -> update (update (Sudoku s) (i, j1) v1) (i, j2) v2
+        Just i -> case rows s !! i of
+            row -> case elemIndices Nothing row of
+                [j1, j2] -> case missingValues row [1..9] of
+                    [v1, v2]
+                        | v1 `elem` toInts (cols s !! j1) -> update (update (Sudoku s) (i, j1) v2) (i, j2) v1
+                        | v1 `elem` toInts (cols s !! j2) -> update (update (Sudoku s) (i, j1) v1) (i, j2) v2
+                        | otherwise -> Sudoku s
     | otherwise = Sudoku s
 
     where
@@ -309,10 +319,12 @@ propagate (Sudoku s)
         rowsBlanks = countBlanks (rows s)
         boxsBlanks = countBlanks (boxs s)
 
+-- | Takes a block and returns all the digits as a list of Int
 toInts :: Block Cell -> [Int]
 toInts b = map fromJust (filter isJust b)
--- Take a block and [1..9] as the arguments
--- and find the missing numbers in a block
+
+-- | Takes a block and [1..9] as the arguments
+-- | and find the missing numbers in a block
 missingValues :: Block Cell -> [Int] -> [Int]
 missingValues b a = case b of
     [] -> a
@@ -324,7 +336,7 @@ choices :: [Int] -> Block Cell -> [Int]
 choices values b = case values of
     [] -> []
     x:xs
-        | x `elem` (toInts b) -> choices xs b
+        | x `elem` toInts b -> choices xs b
         | otherwise   -> x : choices xs b
 test :: String
 test = "4.....8.5.3..........7......2.....6.....8.4......1.......6.3.7.5..2.....1.4......"
