@@ -280,7 +280,7 @@ solve str = case fromString str of
 -- | based on the number of blanks in each block
 propagate :: Sudoku -> Sudoku
 propagate (Sudoku s)
-    -- check for cols/rows/boxs with only 1 blank
+   {- -- check for cols/rows/boxs with only 1 blank
     | 1 `elem` colsBlanks = case elemIndex 1 colsBlanks of
         Just j  -> case cols s !! j of
             b  -> case elemIndex Nothing b of
@@ -294,7 +294,7 @@ propagate (Sudoku s)
         Just i -> case boxs s !! i of
             b  -> case elemIndex Nothing b of
                 Just j  -> update (Sudoku s) (i `mod` 3 * 3 + j `div` 3, i `div` 3 * 3 + j `mod` 3) (missingValue b)
-    -- check for cols/rows
+    -- check for cols/rows-}
     | 2 `elem` colsBlanks = case elemIndex 2 colsBlanks of
         Just j -> case cols s !! j of
             col -> case elemIndices Nothing col of
