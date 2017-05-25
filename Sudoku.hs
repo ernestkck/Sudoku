@@ -304,7 +304,7 @@ solve str = case fromString str of
 -- | based on the number of blanks in each block
 propagate :: Sudoku -> Sudoku
 propagate (Sudoku s)
-     -- check for cols/rows
+     -- check for cols/rows with only 2 blanks
     | 2 `elem` colsBlanks = case elemIndex 2 colsBlanks of
         Just j -> case cols s !! j of
             col -> case elemIndices Nothing col of
@@ -324,14 +324,34 @@ propagate (Sudoku s)
             row -> case elemIndices Nothing row of
                 [j1, j2] -> case missingValues row [1..9] of
                     [v1, v2]
-                        | v1 `elem` toInts (cols s !! j1)
+                        | v1 `elemOfCol` j1
                             -> update (update (Sudoku s) (i, j1) v2) (i, j2) v1
-                        | v1 `elem` toInts (cols s !! j2)
+                        | v1 `elemOfCol` j2
                             -> update (update (Sudoku s) (i, j1) v1) (i, j2) v2
                         | j1 `div` 3 /= j2 `div` 3 && elemOfBox v1 i j1
                             -> update (update (Sudoku s) (i, j1) v2) (i, j2) v1
                         | j1 `div` 3 /= j2 `div` 3 && elemOfBox v1 i j2
                             -> update (update (Sudoku s) (i, j1) v1) (i, j2) v2
+                        | otherwise -> Sudoku s
+    | 2 `elem` boxsBlanks = case elemIndex 2 boxsBlanks of
+        Just i -> case boxs s !! i of
+            box -> case elemIndices Nothing box of
+                [j1, j2] -> case missingValues box [1..9] of
+                    [v1, v2]
+                        -- two empty cells in different columns
+                        | j1 `mod` 3 /= j2 `mod` 3 && v1 `elemOfCol` colOfBox i j1
+                            -> update (update (Sudoku s) (rowOfBox i j1, colOfBox i j1) v2)
+                                (rowOfBox i j2, colOfBox i j2) v1
+                        | j1 `mod` 3 /= j2 `mod` 3 && v1 `elemOfCol` colOfBox i j2
+                            -> update (update (Sudoku s) (rowOfBox i j1, colOfBox i j1) v1)
+                                (rowOfBox i j2, colOfBox i j2) v2
+                        -- two empty cells in different rows
+                        | j1 `div` 3 /= j2 `div` 3 && v1 `elemOfRow` rowOfBox i j1
+                            -> update (update (Sudoku s) (rowOfBox i j1, colOfBox i j1) v2)
+                                (rowOfBox i j2, colOfBox i j2) v1
+                        | j1 `div` 3 /= j2 `div` 3 && v1 `elemOfRow` rowOfBox i j2
+                            -> update (update (Sudoku s) (rowOfBox i j1, colOfBox i j1) v1)
+                                (rowOfBox i j2, colOfBox i j2) v2
                         | otherwise -> Sudoku s
     | otherwise = Sudoku s
 
@@ -343,6 +363,8 @@ propagate (Sudoku s)
         elemOfRow e i = e `elem` toInts (rows s !! i)
         elemOfCol e j = e `elem` toInts (cols s !! j)
         elemOfBox e i j = e `elem` toInts (boxs s !! (i `div` 3 + j `div` 3 * 3))
+        rowOfBox i j = i `mod` 3 * 3 + j `div` 3
+        colOfBox i j = i `div` 3 * 3 + j `mod` 3
 
 -- | Takes a block and returns all the digits as a list of Int
 toInts :: Block Cell -> [Int]
