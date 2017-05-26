@@ -60,7 +60,7 @@ example =
 allBlanks :: Sudoku
 allBlanks = Sudoku (replicate 9 (replicate 9 Nothing))
 
--- | isSudoku checks if a Sudoku has the proper dimensions
+-- | isSudoku checks if a Sudoku has the proper dimensions (9x9)
 -- >>> isSudoku (Sudoku [])
 -- False
 -- >>> isSudoku allBlanks
@@ -71,9 +71,7 @@ allBlanks = Sudoku (replicate 9 (replicate 9 Nothing))
 -- False
 isSudoku :: Sudoku -> Bool
 isSudoku (Sudoku s) =
-    length checksudoku == 9 && and checksudoku
-        where
-            checksudoku = map (\x -> length x == 9) s
+    length s == 9 && all (\x -> length x == 9) s
 
 
 -- | noBlanks checks if a Sudoku has no blanks
@@ -100,7 +98,7 @@ printSudoku s = putStrLn $ unlines (chunksOf 9 (toString s))
 cell :: Gen (Maybe Int)
 cell =
   frequency
-    [(20, oneof [return (Just n) | n <- [1 .. 9]]), (80, return Nothing)]
+    [(30, oneof [return (Just n) | n <- [1 .. 9]]), (70, return Nothing)]
 
 -- | An instance for generating Arbitrary Sudokus
 -- prop> isSudoku s
@@ -157,7 +155,7 @@ cols = transpose
 -- | 1 4 7
 -- | 2 5 8
 boxs :: Matrix a -> [Block a]
-boxs m = map concat $ groupBy3 $ helper (concatMap groupBy3 m) 0 0
+boxs m = map concat $ chunksOf 3 $ helper (concatMap (chunksOf 3) m) 0 0
     where
         helper :: [a] -> Int -> Int -> [a]
         helper [] _ _   = []
@@ -165,11 +163,6 @@ boxs m = map concat $ groupBy3 $ helper (concatMap groupBy3 m) 0 0
             | i < j+27 = head (drop i x) : helper x (i+3) j
             | j < 2    = helper x (j+1) (j+1)
             | otherwise = []
-
-        groupBy3 :: Row a -> [Block a]
-        groupBy3 a = case a of
-            []       -> []
-            a:b:c:ds -> [a,b,c] : groupBy3 ds
 
 -- | Test if a block of cells does not contain the same integer twice
 -- >>> okBlock [Just 1, Just 7, Nothing, Nothing, Just 3, Nothing, Nothing, Nothing, Just 2]
@@ -191,6 +184,7 @@ okBlock (x:xs) = case x of
 -- True
 -- >>> okSudoku $ fromString "36..712...5....18...92.47......13.284..1.2..927.46......53.89...83....6...769..43"
 -- False
+
 -- | Check that all blocks (rows, columns and boxes) do not contain the same digit twice
 okSudoku :: Sudoku -> Bool
 okSudoku (Sudoku s) = all okBlock (rows s) && all okBlock (cols s) && all okBlock (boxs s)
@@ -201,15 +195,10 @@ type Pos = (Int, Int)
 -- >>> blank allBlanks
 -- (0,0)
 
--- | Check that the cell at the blank position is Nothing
--- prop> prop_Blank
-prop_Blank :: Sudoku -> Bool
-prop_Blank s = case blank s of
-    (i, j) -> isNothing (cells s !! i !! j)
-
--- | Finds a blank cell in the sudoku with fewest candidates by rows, columns and boxes
 {-
 Original naive blank function which finds the first blank cell
+>>> blank example
+(0,2)
 blank :: Sudoku -> Pos
 blank sud = helper sud 0 0
     where
@@ -222,6 +211,8 @@ blank sud = helper sud 0 0
                     Nothing -> (i, j)
                     _       -> helper (Sudoku (ys:xs)) i (j+1)
 -}
+
+-- | Finds a blank cell in the sudoku with fewest candidates by rows, columns and boxes
 blank :: Sudoku -> Pos
 blank (Sudoku s) = case elemIndex minBlank filtercalcBlanks of
     Just i -> (i `div` 9, i `mod` 9)
@@ -240,6 +231,13 @@ blank (Sudoku s) = case elemIndex minBlank filtercalcBlanks of
         rowBlanks i = countBlanks (rows s) !! i
         boxBlanks i j = countBlanks (boxs s) !! (i `div` 3 + j `div` 3 * 3)
 
+
+-- | Check that the cell at the blank position is Nothing
+-- prop> prop_Blank
+prop_Blank :: Sudoku -> Bool
+prop_Blank s = case blank s of
+    (i, j) -> isNothing (cells s !! i !! j)
+
 -- | Return the number of blanks for a list of blocks
 countBlanks :: [Block Cell] -> [Int]
 countBlanks b = map (length . filter isNothing) b
@@ -254,6 +252,7 @@ countBlanks b = map (length . filter isNothing) b
 (!!=) [] _ = []
 (!!=) a (i, e) = case splitAt i a of
     (x,y) -> x ++ e : tail y
+
 
 -- | Given a Sudoku, a position, and a new cell value,
 -- | update the given Sudoku at the given position with the new value.
@@ -276,7 +275,7 @@ solve str = case fromString str of
             | noBlanks propagated       = [propagated]
             | otherwise           = do
                 i <- choices
-                let s' = update propagated (blank propagated) i
+                let s' = propagate (update propagated (blank propagated) i)
                 solve' s'
                 where
                     propagated = propagate s
