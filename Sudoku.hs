@@ -223,34 +223,27 @@ blank sud = helper sud 0 0
                     _       -> helper (Sudoku (ys:xs)) i (j+1)
 -}
 blank :: Sudoku -> Pos
-blank (Sudoku s)
-    | minCols <= minRows = case elemIndex minCols (countBlanks (cols s)) of
-        Nothing -> error "cannot find minCols in blank"
-        Just j  -> colhelper (cols s !! j) 0 j
-    | otherwise = case elemIndex minRows (countBlanks (rows s)) of
-        Nothing -> error "cannot find minRows in blank"
-        Just i  -> rowhelper (rows s !! i) i 0
+blank (Sudoku s) = helper (toString (Sudoku s)) 0 99
+  --      '.' -> elemIndex minBlank calcBlanks of
+ --   Just i -> (i `div` 9, i `mod` 9)
     where
-        colhelper :: Block Cell -> Int -> Int -> Pos
-        colhelper [] _ _ = error "empty col in colhelper"
-        colhelper (x:xs) i j = case x of
-            Nothing -> (i, j)
-            _       -> colhelper xs (i+1) j
+        helper :: String -> Int -> Int -> Pos
+        helper s i n = case s of
+            x:xs -> case x of
+                '.' -> case calcBlanks !! i of
+                    j -> helper
+                _   -> helper xs (i+1)
+        calcBlanks = [rowBlanks i + colBlanks j + boxBlanks i j | i <- [0..8], j <- [0..8]]
+        findMinBlank :: -> Int
+        minBlanks a = case a of
+            []   -> 99
+            x:xs -> min x (minBlanks xs)
 
-        rowhelper :: Block Cell -> Int -> Int -> Pos
-        rowhelper [] _ _ = error "empty row in rowhelper"
-        rowhelper (x:xs) i j = case x of
-            Nothing -> (i, j)
-            _       -> rowhelper xs i (j+1)
+        minBlank = minBlanks calcBlanks
+        colBlanks j = countBlanks (cols s) !! j
+        rowBlanks i = countBlanks (rows s) !! i
+        boxBlanks i j = countBlanks (boxs s) !! (i `div` 3 + j `div` 3 * 3)
 
-        minElem :: [Int] -> Int
-        minElem a = case a of
-            []  -> 10
-            x:xs
-                | x > 0 -> min x (minElem xs)
-                | otherwise -> minElem xs
-        minCols = minElem (countBlanks (cols s))
-        minRows = minElem (countBlanks (rows s))
 -- | Return the number of blanks for a list of blocks
 countBlanks :: [Block Cell] -> [Int]
 countBlanks b = map (length . filter isNothing) b
@@ -388,3 +381,15 @@ choices values b = case values of
         | otherwise   -> x : choices xs b-}
 test :: String
 test = "4.....8.5.3..........7......2.....6.....8.4......1.......6.3.7.5..2.....1.4......"
+
+eg :: Sudoku
+eg = Sudoku
+    [[Nothing,Just 3,Just 5,Nothing,Nothing,Nothing,Nothing,Nothing,Just 9],
+    [Nothing,Nothing,Just 2,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing],
+    [Nothing,Nothing,Just 6,Just 1,Nothing,Nothing,Nothing,Just 4,Nothing],
+    [Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing],
+    [Nothing,Nothing,Nothing,Nothing,Nothing,Just 4,Nothing,Nothing,Nothing],
+    [Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing],
+    [Nothing,Nothing,Nothing,Just 4,Nothing,Nothing,Nothing,Nothing,Just 2],
+    [Nothing,Nothing,Nothing,Nothing,Just 7,Nothing,Just 6,Nothing,Nothing],
+    [Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Just 3,Nothing,Just 1]]
