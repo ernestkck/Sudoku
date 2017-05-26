@@ -207,7 +207,7 @@ prop_Blank :: Sudoku -> Bool
 prop_Blank s = case blank s of
     (i, j) -> isNothing (cells s !! i !! j)
 
--- | Finds a blank cell in the sudoku with fewest candidates by rows and columns
+-- | Finds a blank cell in the sudoku with fewest candidates by rows, columns and boxes
 {-
 Original naive blank function which finds the first blank cell
 blank :: Sudoku -> Pos
@@ -233,7 +233,7 @@ blank (Sudoku s) = case elemIndex minBlank filtercalcBlanks of
                 '.' -> calcBlanks !! i : helper xs (i+1)
                 _   -> 99 : helper xs (i+1)
 
-        calcBlanks = [rowBlanks i + colBlanks j | i <- [0..8], j <- [0..8]]
+        calcBlanks = [rowBlanks i + colBlanks j + boxBlanks i j | i <- [0..8], j <- [0..8]]
         filtercalcBlanks = helper (toString (Sudoku s)) 0
         minBlank = minimum filtercalcBlanks
         colBlanks j = countBlanks (cols s) !! j
@@ -271,8 +271,9 @@ solve str = case fromString str of
     where
         solve' :: Sudoku -> [Sudoku]
         solve' s
-            | not (okSudoku s)    = []
-            | noBlanks propagated = [propagated]
+            | not (okSudoku s)          = []
+            | not (okSudoku propagated) = []
+            | noBlanks propagated       = [propagated]
             | otherwise           = do
                 i <- choices
                 let s' = update propagated (blank propagated) i
@@ -293,7 +294,20 @@ solve str = case fromString str of
 -- | based on the number of blanks in each block
 propagate :: Sudoku -> Sudoku
 propagate (Sudoku s)
-     -- check cols/rows/boxs with only 2 blanks
+     -- check cols/rows/boxs with only 1 blank
+     | 1 `elem` colsBlanks = case elemIndex 1 colsBlanks of
+         Just j  -> case cols s !! j of
+             b  -> case elemIndex Nothing b of
+                 Just i  -> update (Sudoku s) (i, j) (missingValue b)
+     | 1 `elem` rowsBlanks = case elemIndex 1 rowsBlanks of
+         Just i  -> case rows s !! i of
+             b  -> case elemIndex Nothing b of
+                 Just j  -> update (Sudoku s) (i, j) (missingValue b)
+     | 1 `elem` boxsBlanks = case elemIndex 1 boxsBlanks of
+         Just i -> case boxs s !! i of
+             b  -> case elemIndex Nothing b of
+                 Just j  -> update (Sudoku s) (rowOfBox i j, colOfBox i j) (missingValue b)
+    -- check cols/rows/boxs with only 2 blanks
     | 2 `elem` colsBlanks = case elemIndex 2 colsBlanks of
         Just j -> case cols s !! j of
             col -> case elemIndices Nothing col of
@@ -376,16 +390,7 @@ choices values b = case values of
         | x `elem` toInts b -> choices xs b
         | otherwise   -> x : choices xs b-}
 test :: String
-test = "4.....8.5.3..........7......2.....6.....8.4......1.......6.3.7.5..2.....1.4......"
+test = "52...6.........7.13...........4..8..6......5...........418.........3..2...87....."
 
-eg :: Sudoku
-eg = Sudoku
-    [[Nothing,Just 3,Just 5,Nothing,Nothing,Nothing,Nothing,Nothing,Just 9],
-    [Nothing,Nothing,Just 2,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing],
-    [Nothing,Nothing,Just 6,Just 1,Nothing,Nothing,Nothing,Just 4,Nothing],
-    [Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing],
-    [Nothing,Nothing,Nothing,Nothing,Nothing,Just 4,Nothing,Nothing,Nothing],
-    [Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Nothing],
-    [Nothing,Nothing,Nothing,Just 4,Nothing,Nothing,Nothing,Nothing,Just 2],
-    [Nothing,Nothing,Nothing,Nothing,Just 7,Nothing,Just 6,Nothing,Nothing],
-    [Nothing,Nothing,Nothing,Nothing,Nothing,Nothing,Just 3,Nothing,Just 1]]
+test2 :: String
+test2 = "4.....8.5.3..........7......2.....6.....8.4......1.......6.3.7.5..2.....1.4......"
