@@ -381,13 +381,7 @@ missingValues b a = case b of
         Nothing -> missingValues xs a
         Just x  -> missingValues xs (filter (/= x) a)
 
-{-
-choices :: [Int] -> Block Cell -> [Int]
-choices values b = case values of
-    [] -> []
-    x:xs
-        | x `elem` toInts b -> choices xs b
-        | otherwise   -> x : choices xs b-}
+
 test :: String
 test = "52...6.........7.13...........4..8..6......5...........418.........3..2...87....."
 
