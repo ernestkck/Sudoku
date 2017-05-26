@@ -233,7 +233,7 @@ blank (Sudoku s) = case elemIndex minBlank filtercalcBlanks of
                 '.' -> calcBlanks !! i : helper xs (i+1)
                 _   -> 99 : helper xs (i+1)
 
-        calcBlanks = [rowBlanks i + colBlanks j + boxBlanks i j | i <- [0..8], j <- [0..8]]
+        calcBlanks = [rowBlanks i + colBlanks j | i <- [0..8], j <- [0..8]]
         filtercalcBlanks = helper (toString (Sudoku s)) 0
         minBlank = minimum filtercalcBlanks
         colBlanks j = countBlanks (cols s) !! j
@@ -293,7 +293,7 @@ solve str = case fromString str of
 -- | based on the number of blanks in each block
 propagate :: Sudoku -> Sudoku
 propagate (Sudoku s)
-     -- check for cols/rows with only 2 blanks
+     -- check cols/rows/boxs with only 2 blanks
     | 2 `elem` colsBlanks = case elemIndex 2 colsBlanks of
         Just j -> case cols s !! j of
             col -> case elemIndices Nothing col of
