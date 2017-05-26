@@ -223,23 +223,19 @@ blank sud = helper sud 0 0
                     _       -> helper (Sudoku (ys:xs)) i (j+1)
 -}
 blank :: Sudoku -> Pos
-blank (Sudoku s) = helper (toString (Sudoku s)) 0 99
-  --      '.' -> elemIndex minBlank calcBlanks of
- --   Just i -> (i `div` 9, i `mod` 9)
+blank (Sudoku s) = case elemIndex minBlank filtercalcBlanks of
+    Just i -> (i `div` 9, i `mod` 9)
     where
-        helper :: String -> Int -> Int -> Pos
-        helper s i n = case s of
+        helper :: String -> Int -> [Int]
+        helper s i = case s of
+            []   -> []
             x:xs -> case x of
-                '.' -> case calcBlanks !! i of
-                    j -> helper
-                _   -> helper xs (i+1)
-        calcBlanks = [rowBlanks i + colBlanks j + boxBlanks i j | i <- [0..8], j <- [0..8]]
-        findMinBlank :: -> Int
-        minBlanks a = case a of
-            []   -> 99
-            x:xs -> min x (minBlanks xs)
+                '.' -> calcBlanks !! i : helper xs (i+1)
+                _   -> 99 : helper xs (i+1)
 
-        minBlank = minBlanks calcBlanks
+        calcBlanks = [rowBlanks i + colBlanks j + boxBlanks i j | i <- [0..8], j <- [0..8]]
+        filtercalcBlanks = helper (toString (Sudoku s)) 0
+        minBlank = minimum filtercalcBlanks
         colBlanks j = countBlanks (cols s) !! j
         rowBlanks i = countBlanks (rows s) !! i
         boxBlanks i j = countBlanks (boxs s) !! (i `div` 3 + j `div` 3 * 3)
